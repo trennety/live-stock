@@ -9,6 +9,7 @@ services:
     networks:
       - backend
     
+#Networks
 networks:
   backend:
     driver: bridge
