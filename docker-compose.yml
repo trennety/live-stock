@@ -1,0 +1,14 @@
+services:
+  # Stock Publisher (Producer)
+  stock-publisher:
+    image: switzerchees/stock-publisher
+    container_name: stock_publisher
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+    networks:
+      - backend
+    
+networks:
+  backend:
+    driver: bridge
