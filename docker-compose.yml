@@ -9,7 +9,18 @@ services:
     networks:
       - backend
 
-#Networks
+  # RabbitMQ (Message Broker)
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    networks:
+      - backend
+
 networks:
   backend:
-    driver: bridge
+  frontend:
+
+
