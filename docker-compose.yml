@@ -19,6 +19,49 @@ services:
     networks:
       - backend
 
+  # Konsumenten
+  consumer-aapl:
+    build: ./consumer
+    container_name: consumer_aapl
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      QUEUE_NAME: AAPL
+    restart: on-failure
+    networks:
+      - backend
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  consumer-msft:
+    build: ./consumer
+    container_name: consumer_msft
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      QUEUE_NAME: MSFT
+    restart: on-failure
+    networks:
+      - backend
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  consumer-tsla:
+    build: ./consumer
+    container_name: consumer_tsla
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      QUEUE_NAME: TSLA
+    restart: on-failure
+    networks:
+      - backend
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
 networks:
   backend:
   frontend:
