@@ -1,0 +1,17 @@
+# Verwende ein leichtgewichtiges Python-Image
+FROM python:3.9-slim
+
+# Setze das Arbeitsverzeichnis im Container
+WORKDIR /app
+
+# Kopiere die Anforderungen in das Arbeitsverzeichnis
+COPY requirements.txt ./requirements.txt
+
+# Installiere die Python-Abhängigkeiten
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Kopiere das Konsumenten-Skript in das Arbeitsverzeichnis
+COPY consumer.py consumer.py
+
+# Setze den Konsumenten als Standardbefehl
+CMD ["python", "consumer.py"]
