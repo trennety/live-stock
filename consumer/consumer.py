@@ -1,3 +1,4 @@
+#Importe der Bibliotheken
 import pika
 import pymongo
 import json
