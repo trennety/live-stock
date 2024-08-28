@@ -20,7 +20,6 @@ except pika.exceptions.AMQPConnectionError as e:
     print(f"Failed to connect to RabbitMQ at {rabbitmq_host}:{rabbitmq_port} - {str(e)}")
     exit(1)
 
-
 # Verbindung zu MongoDB herstellen
 try:
     client = pymongo.MongoClient(mongodb_uri)
@@ -31,7 +30,13 @@ except pymongo.errors.ServerSelectionTimeoutError as e:
     print(f"Failed to connect to MongoDB at {mongodb_uri} - {str(e)}")
     exit(1)
 
+# Zähler und Summen für die Berechnung des Durchschnittspreises
+message_count = 0
+total_price = 0.0
+
 def callback(ch, method, properties, body):
+    global message_count, total_price
+    
     data = json.loads(body)
     company = data['company']
     price = float(data['price'])
@@ -51,6 +56,20 @@ def callback(ch, method, properties, body):
         collection.insert_one({'company': company, 'avgPrice': round(price, 2)})
     
     print(f"Processed {company} with new price: {round(price, 2)}")
+
+    # Nachrichten zählen und Gesamtpreis summieren
+    message_count += 1
+    total_price += price
+
+    # Durchschnitt berechnen und ausgeben, wenn 1000 Nachrichten verarbeitet wurden
+    if message_count == 1000:
+        avg_price = round(total_price / message_count, 2)
+        print(f"Durchschnittspreis nach 1000 Nachrichten: {avg_price}")
+        
+        # Zähler und Summe zurücksetzen
+        message_count = 0
+        total_price = 0.0
+
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 # RabbitMQ Queue konsumieren
