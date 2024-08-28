@@ -11,6 +11,9 @@ mongodb_uri = os.getenv('MONGODB_URI', 'mongodb://mongo1:27017,mongo2:27018,mong
 mongodb_db = 'stockmarket'
 mongodb_collection = 'stocks'
 
+# Glättungsfaktor für den EMA
+alpha = 0.1
+
 # Verbindung zu RabbitMQ herstellen
 try:
     connection = pika.BlockingConnection(pika.ConnectionParameters(host=rabbitmq_host, port=rabbitmq_port))
@@ -30,47 +33,42 @@ except pymongo.errors.ServerSelectionTimeoutError as e:
     print(f"Failed to connect to MongoDB at {mongodb_uri} - {str(e)}")
     exit(1)
 
-# Zähler und Summen für die Berechnung des Durchschnittspreises
-message_count = 0
-total_price = 0.0
+# Hole den aktuellen Durchschnittspreis aus der MongoDB
+current_data = collection.find_one({'type': 'average_price'})
+if current_data:
+    avg_price = current_data['avgPrice']
+else:
+    avg_price = 0.0
 
 def callback(ch, method, properties, body):
-    global message_count, total_price
+    global avg_price
     
-    data = json.loads(body)
-    company = data['company']
-    price = float(data['price'])
-    
-    # Aggregierte Daten aus der MongoDB holen
-    existing_data = collection.find_one({'company': company})
-    
-    if existing_data:
-        # Durchschnitt neu berechnen und auf 2 Dezimalstellen runden
-        new_avg_price = round((existing_data['avgPrice'] + price) / 2, 2)
+    try:
+        # Daten laden und Preis extrahieren
+        data = json.loads(body)
+        price = float(data['price'])
+
+        # Berechne den exponentiellen gleitenden Durchschnitt
+        avg_price = round(alpha * price + (1 - alpha) * avg_price, 2)
+        print(f"Neuer Durchschnittspreis: {avg_price}")
+
+        # Durchschnittspreis in die MongoDB speichern
         collection.update_one(
-            {'company': company},
-            {'$set': {'avgPrice': new_avg_price}}
+            {'type': 'average_price'},
+            {'$set': {'avgPrice': avg_price}},
+            upsert=True
         )
-    else:
-        # Ersten Eintrag hinzufügen, Preis auf 2 Dezimalstellen runden
-        collection.insert_one({'company': company, 'avgPrice': round(price, 2)})
-    
-    print(f"Processed {company} with new price: {round(price, 2)}")
 
-    # Nachrichten zählen und Gesamtpreis summieren
-    message_count += 1
-    total_price += price
+        # Nachricht nach erfolgreicher Verarbeitung bestätigen
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
-    # Durchschnitt berechnen und ausgeben, wenn 1000 Nachrichten verarbeitet wurden
-    if message_count == 1000:
-        avg_price = round(total_price / message_count, 2)
-        print(f"Durchschnittspreis nach 1000 Nachrichten: {avg_price}")
-        
-        # Zähler und Summe zurücksetzen
-        message_count = 0
-        total_price = 0.0
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"Fehler bei der Verarbeitung der Nachricht: {e}")
+        # Nachricht wird nicht bestätigt und bleibt in der Warteschlange, um erneut verarbeitet zu werden
 
-    ch.basic_ack(delivery_tag=method.delivery_tag)
+    except Exception as e:
+        print(f"Unerwarteter Fehler: {e}")
+        # Nachricht wird nicht bestätigt und bleibt in der Warteschlange, um erneut verarbeitet zu werden
 
 # RabbitMQ Queue konsumieren
 channel.basic_consume(queue=queue_name, on_message_callback=callback)
