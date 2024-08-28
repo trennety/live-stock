@@ -1,0 +1,34 @@
+# Verwende ein leichtgewichtiges Go-Image als Basis
+FROM golang:1.22.2 AS builder
+
+# Setze das Arbeitsverzeichnis im Container
+WORKDIR /app
+
+# Kopiere die Go-Moduldateien und installiere die Abhängigkeiten
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Kopiere den restlichen Quellcode
+COPY . .
+
+# Baue das Go-Programm statisch verlinkt
+RUN CGO_ENABLED=0 GOOS=linux go build -o stock-publisher .
+
+# Nutze ein leichtgewichtiges Image für die Ausführung des Programms
+FROM alpine:latest
+
+# Setze das Arbeitsverzeichnis im Container
+WORKDIR /root/
+
+# Kopiere das gebaute Go-Programm aus dem vorherigen Schritt
+COPY --from=builder /app/stock-publisher .
+
+# Füge Ausführungsrechte für das Programm hinzu
+RUN chmod +x /root/stock-publisher
+
+# Definiere die Umgebungsvariable für RabbitMQ
+#ENV RABBITMQ_URL=amqp://stockmarket:supersecret123@rabbitmq:5672/
+ENV RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+
+# Definiere den Standardbefehl zum Starten des Programms
+CMD ["./stock-publisher"]
