@@ -1,7 +1,7 @@
 services:
   # Stock Publisher (Producer)
   stock-publisher:
-    build: ./stock-publisher
+    image: trennety/stock-publisher
     container_name: stock_publisher
     environment:
       RABBITMQ_HOST: rabbitmq
@@ -36,7 +36,7 @@ services:
 
   # Konsumenten
   consumer-aapl:
-    build: ./consumer
+    image: trennety/consumer
     container_name: consumer_aapl
     environment:
       RABBITMQ_HOST: rabbitmq
@@ -57,7 +57,7 @@ services:
         condition: service_started
 
   consumer-msft:
-    build: ./consumer
+    image: trennety/consumer
     container_name: consumer_msft
     environment:
 #      RABBITMQ_URL: amqp://rabbitmq:supersecret123@rabbitmq:5672
@@ -79,7 +79,7 @@ services:
         condition: service_started
 
   consumer-tsla:
-    build: ./consumer
+    image: trennety/consumer
     container_name: consumer_tsla
     environment:
       RABBITMQ_HOST: rabbitmq
@@ -155,7 +155,7 @@ services:
 
   #Frontend-Konfiguration
   frontend1:
-    build: ./stock-liveview
+    image: trennety/stock-liveview
     container_name: frontend1
     restart: always
     ports:
@@ -171,7 +171,7 @@ services:
       - mongo3
 
   frontend2:
-    build: ./stock-liveview
+    image: trennety/stock-liveview
     container_name: frontend2
     restart: always
     ports:
@@ -211,6 +211,7 @@ volumes:
   mongo3_data:
   mongo3_config:
 
+#Netzwerke für die Services
 networks:
   backend:
   frontend:
