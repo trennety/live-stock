@@ -1,23 +1,37 @@
 services:
   # Stock Publisher (Producer)
   stock-publisher:
-    image: switzerchees/stock-publisher
+    build: ./stock-publisher
     container_name: stock_publisher
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
+    restart: on-failure
     networks:
       - backend
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
 
   # RabbitMQ (Message Broker)
   rabbitmq:
-    image: rabbitmq:3-management
+    image: rabbitmq:3-management-alpine
     container_name: rabbitmq
     ports:
       - "15672:15672"
       - "5672:5672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest #stockmarket
+      RABBITMQ_DEFAULT_PASS: guest #supersecret123
     networks:
       - backend
+    healthcheck:
+      test: ["CMD", "rabbitmqctl", "status"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 
   # Konsumenten
   consumer-aapl:
@@ -27,26 +41,41 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       QUEUE_NAME: AAPL
+      MONGODB_URI: mongodb://mongo1:27017,mongo2:27018,mongo3:27019/stockmarket?replicaSet=rs0
     restart: on-failure
     networks:
       - backend
     depends_on:
       rabbitmq:
         condition: service_healthy
+      mongo1:
+        condition: service_started
+      mongo2:
+        condition: service_started
+      mongo3:
+        condition: service_started
 
   consumer-msft:
     build: ./consumer
     container_name: consumer_msft
     environment:
+#      RABBITMQ_URL: amqp://rabbitmq:supersecret123@rabbitmq:5672
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       QUEUE_NAME: MSFT
+      MONGODB_URI: mongodb://mongo1:27017,mongo2:27018,mongo3:27019/stockmarket?replicaSet=rs0
     restart: on-failure
     networks:
       - backend
     depends_on:
       rabbitmq:
         condition: service_healthy
+      mongo1:
+        condition: service_started
+      mongo2:
+        condition: service_started
+      mongo3:
+        condition: service_started
 
   consumer-tsla:
     build: ./consumer
@@ -55,15 +84,117 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       QUEUE_NAME: TSLA
+      MONGODB_URI: mongodb://mongo1:27017,mongo2:27018,mongo3:27019/stockmarket?replicaSet=rs0
     restart: on-failure
     networks:
       - backend
     depends_on:
       rabbitmq:
         condition: service_healthy
+      mongo1:
+        condition: service_started
+      mongo2:
+        condition: service_started
+      mongo3:
+        condition: service_started
+
+
+
+  # MongoDB Cluster
+  mongo1:
+    image: mongo:4.4
+    container_name: mongo1
+    ports:
+      - "27017:27017"
+    command: mongod --replSet rs0 --bind_ip_all
+    volumes:
+      - mongo1-data:/data/db
+    networks:
+      - backend
+
+  mongo2:
+    image: mongo:4.4
+    container_name: mongo2
+    ports:
+      - "27018:27017"
+    command: mongod --replSet rs0 --bind_ip_all
+    volumes:
+      - mongo2-data:/data/db
+    networks:
+      - backend
+
+  mongo3:
+    image: mongo:4.4
+    container_name: mongo3
+    ports:
+      - "27019:27017"
+    command: mongod --replSet rs0 --bind_ip_all
+    volumes:
+      - mongo3-data:/data/db
+    networks:
+      - backend
+
+  # MongoDB Init Replica Set
+  mongo-init-replica:
+    image: mongo:4.4
+    container_name: mongo_init_replica
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+    networks:
+      - backend
+    entrypoint: >
+      bash -c " sleep 5; echo 'Konfiguriere das Replica-Set'; mongo --host mongo1 --eval 'rs.initiate({_id: \"rs0\", members: [{_id: 0, host: \"mongo1:27017\"}, {_id: 1, host: \"mongo2:27018\"}, {_id: 2, host: \"mongo3:27019\"}]})' "
+
+  #Frontend-Konfiguration
+  frontend1:
+    build: ./stock-liveview
+    container_name: frontend1
+    ports:
+      - "3001:3000"
+    environment:
+      MONGODB_URI: mongodb://mongo1:27017,mongo2:27018,mongo3:27019/stockmarket?replicaSet=rs0
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+
+  frontend2:
+    build: ./stock-liveview
+    container_name: frontend2
+    ports:
+      - "3002:3000"
+    environment:
+      MONGODB_URI: mongodb://mongo1:27017,mongo2:27018,mongo3:27019/stockmarket?replicaSet=rs0
+    networks:
+      - frontend
+      - backend
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+
+
+  # NGINX Load Balancer
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    networks:
+      - frontend
+
+volumes:
+  mongo1-data:
+  mongo2-data:
+  mongo3-data:
 
 networks:
   backend:
   frontend:
-
-
