@@ -152,7 +152,7 @@ services:
     build: ./stock-liveview
     container_name: frontend1
     ports:
-      - "3001:3000"
+      - "3000:3000"
     environment:
       MONGODB_URI: mongodb://mongo1:27017,mongo2:27018,mongo3:27019/stockmarket?replicaSet=rs0
     networks:
@@ -167,7 +167,7 @@ services:
     build: ./stock-liveview
     container_name: frontend2
     ports:
-      - "3002:3000"
+      - "3001:3000"
     environment:
       MONGODB_URI: mongodb://mongo1:27017,mongo2:27018,mongo3:27019/stockmarket?replicaSet=rs0
     networks:
