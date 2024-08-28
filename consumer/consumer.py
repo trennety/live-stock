@@ -40,17 +40,17 @@ def callback(ch, method, properties, body):
     existing_data = collection.find_one({'company': company})
     
     if existing_data:
-        # Durchschnitt neu berechnen
-        new_avg_price = (existing_data['avgPrice'] + price) / 2
+        # Durchschnitt neu berechnen und auf 2 Dezimalstellen runden
+        new_avg_price = round((existing_data['avgPrice'] + price) / 2, 2)
         collection.update_one(
             {'company': company},
             {'$set': {'avgPrice': new_avg_price}}
         )
     else:
-        # Ersten Eintrag hinzufügen
-        collection.insert_one({'company': company, 'avgPrice': price})
+        # Ersten Eintrag hinzufügen, Preis auf 2 Dezimalstellen runden
+        collection.insert_one({'company': company, 'avgPrice': round(price, 2)})
     
-    print(f"Processed {company} with new price: {price}")
+    print(f"Processed {company} with new price: {round(price, 2)}")
     ch.basic_ack(delivery_tag=method.delivery_tag)
 
 # RabbitMQ Queue konsumieren
