@@ -11,8 +11,9 @@ mongodb_uri = os.getenv('MONGODB_URI', 'mongodb://mongo1:27017,mongo2:27018,mong
 mongodb_db = 'stockmarket'
 mongodb_collection = 'stocks'
 
-# Glättungsfaktor für den EMA
-alpha = 0.1
+# Liste zum Zwischenspeichern der letzten 1000 Preise
+price_buffer = []
+batch_size = 1000  # Anzahl der Datenpakete, die gesammelt werden sollen
 
 # Verbindung zu RabbitMQ herstellen
 try:
@@ -33,31 +34,39 @@ except pymongo.errors.ServerSelectionTimeoutError as e:
     print(f"Failed to connect to MongoDB at {mongodb_uri} - {str(e)}")
     exit(1)
 
-# Hole den aktuellen Durchschnittspreis aus der MongoDB
-current_data = collection.find_one({'type': 'average_price'})
-if current_data:
-    avg_price = current_data['avgPrice']
-else:
-    avg_price = 0.0
+def calculate_and_store_average():
+    """Berechnet den Durchschnitt der gesammelten Preise und speichert ihn in MongoDB."""
+    global price_buffer
+    
+    if price_buffer:
+        avg_price = round(sum(price_buffer) / len(price_buffer), 2)
+        print(f"Berechneter Durchschnittspreis für {queue_name}: {avg_price}")
+        
+        # Durchschnittspreis in die MongoDB für die spezifische Warteschlange speichern
+        collection.update_one(
+            {'queue': queue_name},
+            {'$set': {'avgPrice': avg_price}},
+            upsert=True
+        )
+        
+        # Liste zurücksetzen
+        price_buffer = []
 
 def callback(ch, method, properties, body):
-    global avg_price
-    
+    global price_buffer
+
     try:
         # Daten laden und Preis extrahieren
         data = json.loads(body)
         price = float(data['price'])
 
-        # Berechne den exponentiellen gleitenden Durchschnitt
-        avg_price = round(alpha * price + (1 - alpha) * avg_price, 2)
-        print(f"Neuer Durchschnittspreis: {avg_price}")
+        # Preis zum Zwischenspeicher hinzufügen
+        price_buffer.append(price)
+        print(f"Preis für {queue_name} hinzugefügt: {price}")
 
-        # Durchschnittspreis in die MongoDB speichern
-        collection.update_one(
-            {'type': 'average_price'},
-            {'$set': {'avgPrice': avg_price}},
-            upsert=True
-        )
+        # Wenn 1000 Datenpakete gesammelt wurden, berechne den Durchschnitt und speichere ihn
+        if len(price_buffer) >= batch_size:
+            calculate_and_store_average()
 
         # Nachricht nach erfolgreicher Verarbeitung bestätigen
         ch.basic_ack(delivery_tag=method.delivery_tag)
